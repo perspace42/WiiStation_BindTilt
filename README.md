@@ -1,8 +1,98 @@
 ![WiiStation logo](https://github.com/xjsxjs197/WiiSXRX_2022/raw/main/logo.png)
 
-# WiiStation
+# WiiStation — BindTilt Fork
 
 WiiStation (formerly WiiSXRX_2022), is a Sony PlayStation 1 (PS1/PSX/PSone) emulator, forked from the original WiiSX-RX (https://github.com/niuus/WiiSXRX) emulator by NiuuS, originally a port of PCSX-Reloaded, but with many changes from PCSX-ReARMed, for the Nintendo Wii/Wii U.
+
+---
+
+## ✨ New in This Fork — Wiimote Tilt Steering
+
+This fork adds a **Tilt Steering** analog-source binding designed for kart and racing
+games (e.g. Crash Team Racing, Gran Turismo, Ridge Racer).
+
+### How it works
+
+Hold the Wii Remote horizontally and tilt it **side-to-side (roll)** — just like a
+steering wheel. The rotation angle is translated into the PS1 left analog stick's
+X-axis with a **centre deadzone** and a **square-root response curve** for fine
+control near straight-ahead.
+
+| Wii Remote motion | PS1 output |
+|---|---|
+| Held level | Stick centred — no steering |
+| Tilt right | Steer right (positive X) |
+| Tilt left | Steer left (negative X) |
+
+**Why this is better than the built-in "Tilt" mode for racing:**
+
+| | Legacy Tilt | **Tilt Steering (new)** |
+|---|---|---|
+| Steering axis | Pitch → X (nose up/down) | **Roll → X** (natural wheel feel) |
+| Centre dead zone | None — drifts constantly | ±5° by default — holds centre |
+| Response curve | Linear | Square-root — fine control near centre |
+| Pitch axis | Active | Disabled — pure left/right only |
+| Tunable per game | No (rebuild required) | **Yes — saved per config slot** |
+
+---
+
+### Enabling Tilt Steering
+
+1. Launch a game → open the emulator menu → **Settings → Configure Buttons**
+2. Find **Analog Stick L** and press A to cycle the source until it reads **"Tilt Steering"**
+3. *(Optional)* Adjust **DZ** and **Max** (see below)
+4. Press **Save** to store the mapping to a config slot (1–4)
+
+---
+
+### Per-Profile Tuning (in-game, no rebuild needed)
+
+When a Wiimote or Wiimote+Nunchuk is active, two extra rows appear in the
+**Configure Buttons** screen below the Sensitivity control:
+
+```
+[ − ]  DZ: 5.0   [ + ]      ← Centre dead zone in degrees
+[ − ]  Max: 35   [ + ]      ← Max steering angle in degrees
+```
+
+| Control | Step | Range | What it does |
+|---|---|---|---|
+| **DZ** (Deadzone) | ±0.5° | 0° – 15° | Degrees of roll ignored near level. Raise if the kart drifts when the remote is held flat. |
+| **Max** (Max angle) | ±1° | 10° – 60° | Degrees of roll that produce full lock (±127). Lower = snappier; raise = gentler. |
+
+These controls are **hidden for non-Wiimote pad types** (GameCube, Classic, Pro, HID)
+so the existing layout is completely unchanged for those controllers.
+
+**Workflow:**
+1. Enable Tilt Steering for Analog Stick L
+2. Test in-game — adjust DZ/Max until steering feels right
+3. Hit **Save** → your values are stored in the chosen slot
+4. Load a different game → switch to a different slot with its own DZ/Max values
+
+#### Recommended starting points
+
+| Game | DZ | Max |
+|---|---|---|
+| Crash Team Racing | 5° | 32° |
+| Ridge Racer / Need for Speed | 4° | 25° |
+| Gran Turismo 1 / 2 | 6° | 38° |
+| Formula 1 / Rally | 5° | 35° |
+
+---
+
+### Config format note
+
+The save format was bumped from **version 1 → 2** to store the two new floats.
+Any existing version-1 `.cfg` save files will be ignored on first load and replaced
+with defaults. You will need to re-save your button layouts once after updating.
+
+---
+
+See [`build_instructions.md`](build_instructions.md) for the full build and Wii U port guide.  
+See [`TILT_STEERING_IMPLEMENTATION.md`](TILT_STEERING_IMPLEMENTATION.md) for a technical deep-dive on tilt vs. analog stick mechanics and the full code architecture.
+
+---
+
 
 ## The following changes have been made to the code based on WiiSXRX.
 

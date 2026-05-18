@@ -34,6 +34,14 @@
 #define PI 3.14159f
 #endif
 
+/*
+ * Local shorthands that alias the canonical defaults from controller.h.
+ * Using shorthands keeps the existing code readable while ensuring
+ * there is only one source of truth for the numeric values.
+ */
+#define TILT_DEADZONE_DEG  TILT_DEADZONE_DEG_DEFAULT
+#define TILT_MAX_DEG       TILT_MAX_DEG_DEFAULT
+
 enum { STICK_X, STICK_Y };
 static int getStickValue(joystick_t* j, int axis, int maxAbsValue){
 	float angle = PI * j->ang/180.0f;
@@ -50,6 +58,17 @@ static int getStickValue(joystick_t* j, int axis, int maxAbsValue){
 enum {
 	NUNCHUK_AS_ANALOG, IR_AS_ANALOG,
 	TILT_AS_ANALOG, WHEEL_AS_ANALOG,
+	/*
+	 * TILT_STEERING_AS_ANALOG
+	 * Optimised for kart / racing games.
+	 * Maps Wiimote roll (side-tilt) to the left-stick X axis with:
+	 *   - A TILT_DEADZONE_DEG dead-zone around centre
+	 *   - A square-root sensitivity curve (progressive near centre)
+	 *   - Pitch axis forced to 0 (pure left/right steering only)
+	 * Kept separate from TILT_AS_ANALOG so existing profiles are
+	 * unaffected and users can still choose the legacy tilt mode.
+	 */
+	TILT_STEERING_AS_ANALOG,
 	NO_ANALOG,
 };
 
@@ -82,16 +101,26 @@ static button_t buttons[] = {
 	{ 17, NUNCHUK_D,             "NC-Down" },
 };
 
+/*
+ * Analog source tables control what options appear in the
+ * Configure Buttons menu under "Analog Stick L/R".
+ * Entries are saved/loaded by their array index, so appending
+ * new entries here is safe — existing saved configs keep working.
+ */
 static button_t analog_sources_wmn[] = {
-	{ 0, NUNCHUK_AS_ANALOG,  "Nunchuk" },
-	{ 1, IR_AS_ANALOG,       "IR" },
+	{ 0, NUNCHUK_AS_ANALOG,         "Nunchuk" },
+	{ 1, IR_AS_ANALOG,              "IR" },
+	/* New: steering-optimised tilt available even with Nunchuk attached */
+	{ 2, TILT_STEERING_AS_ANALOG,   "Tilt Steering" },
 };
 
 static button_t analog_sources_wm[] = {
-	{ 0, TILT_AS_ANALOG,     "Tilt" },
-	{ 1, WHEEL_AS_ANALOG,    "Wheel" },
-	{ 2, IR_AS_ANALOG,       "IR" },
-	{ 3, NO_ANALOG,          "None" },
+	{ 0, TILT_AS_ANALOG,            "Tilt" },
+	{ 1, WHEEL_AS_ANALOG,           "Wheel" },
+	{ 2, IR_AS_ANALOG,              "IR" },
+	/* New: steering-optimised tilt with deadzone + sqrt curve */
+	{ 3, TILT_STEERING_AS_ANALOG,   "Tilt Steering" },
+	{ 4, NO_ANALOG,                 "None" },
 };
 
 static button_t menu_combos[] = {
@@ -156,12 +185,70 @@ static int _GetKeys(int Control, BUTTONS * Keys, controller_config_t* config,
 			stickY = 0;
 		}
 	} else if(config->analogL->mask == TILT_AS_ANALOG){
+		/* Legacy tilt mode: unchanged from original WiiSX mapping */
 		stickX = -wpad->orient.pitch;
 		stickY = wpad->orient.roll;
 	} else if(config->analogL->mask == WHEEL_AS_ANALOG){
 		stickX = 512 - wpad->accel.y;
 		stickY = wpad->accel.z - 512;
-	}
+	} else if(config->analogL->mask == TILT_STEERING_AS_ANALOG){
+		/*
+		 * Kart-steering tilt mode
+		 * ─────────────────────────────────────────────────────
+		 * Physical → logical axis mapping:
+		 *   Roll  (tilt left/right)  ──► stickX  (PS1 L-stick X)
+		 *   Pitch (tilt fwd/back)    ──► ignored  (stickY = 0)
+		 *
+		 * Why roll → stickX?
+		 *   In kart games the left-stick X axis is steering.
+		 *   Tilting the Wiimote sideways (roll) is the natural
+		 *   gesture for turning, mirroring a steering wheel.
+		 *
+		 * Processing steps:
+		 *   1. Read wpad->orient.roll  (degrees, +right / −left)
+		 *   2. Subtract TILT_DEADZONE_DEG from the magnitude so
+		 *      small wobbles near level produce exactly 0.
+		 *   3. Clamp to ±TILT_MAX_DEG (the comfortable range).
+		 *   4. Normalise to [−1.0, +1.0].
+		 *   5. Apply square-root curve: output = sign * sqrt(|input|)
+		 *      This makes small tilts produce a larger proportional
+		 *      output than a pure linear map would, compensating for
+		 *      the narrow physical tilt range the user actually uses.
+		 *   6. Scale by 127 and the global sensitivity multiplier.
+		 */
+		{
+			float roll = (float)wpad->orient.roll; /* +right, −left, degrees */
+
+			/* Use per-profile values so each saved config slot can be
+			 * tuned for a specific game (e.g. CTR vs Gran Turismo). */
+			float dz  = config->tiltDeadzone; /* degrees stripped near centre */
+			float max = config->tiltMaxAngle; /* degrees that reach full lock  */
+
+			/* Step 2: remove dead-zone from magnitude */
+			if      (roll >  dz) roll -= dz;
+			else if (roll < -dz) roll += dz;
+			else                 roll  = 0.0f;
+
+			/* Step 3: clamp to usable physical range */
+			if (roll >  max) roll =  max;
+			if (roll < -max) roll = -max;
+
+			/* Step 4: normalise so max -> 1.0 */
+			float normRoll = roll / max;
+
+			/* Step 5: square-root response curve
+			 *   sqrt() only works on positive values, so we extract
+			 *   the sign, apply sqrt to the absolute value, re-apply
+			 *   the sign.  This gives a curve that rises quickly near
+			 *   centre and flattens toward the extremes — ideal for
+			 *   steering where most inputs are small corrections. */
+			float signR = (normRoll >= 0.0f) ? 1.0f : -1.0f;
+			float curved = signR * sqrtf(normRoll * signR);
+
+			/* Step 6: scale to s8 range, apply sensitivity */
+			stickX = (s8)(curved * 127.0f * config->sensitivity);
+			stickY = 0; /* pitch not used — set to centre */
+		}
 	c->leftStickX  = (u8)(stickX+127) & 0xFF;
 	if(config->invertedYL)	c->leftStickY = (u8)(stickY+127) & 0xFF;
 	else					c->leftStickY = (u8)(-stickY+127) & 0xFF;
@@ -185,7 +272,23 @@ static int _GetKeys(int Control, BUTTONS * Keys, controller_config_t* config,
 	} else if(config->analogR->mask == WHEEL_AS_ANALOG){
 		stickX = 512 - wpad->accel.y;
 		stickY = wpad->accel.z - 512;
-	}
+	} else if(config->analogR->mask == TILT_STEERING_AS_ANALOG){
+		/* Same steering-tilt logic as analogL — see comment block above */
+		{
+			float roll = (float)wpad->orient.roll;
+			float dz  = config->tiltDeadzone;
+			float max = config->tiltMaxAngle;
+			if      (roll >  dz) roll -= dz;
+			else if (roll < -dz) roll += dz;
+			else                 roll  = 0.0f;
+			if (roll >  max) roll =  max;
+			if (roll < -max) roll = -max;
+			float normRoll = roll / max;
+			float signR = (normRoll >= 0.0f) ? 1.0f : -1.0f;
+			float curved = signR * sqrtf(normRoll * signR);
+			stickX = (s8)(curved * 127.0f * config->sensitivity);
+			stickY = 0;
+		}
 	c->rightStickX  = (u8)(stickX+127) & 0xFF;
 	if(config->invertedYR)	c->rightStickY = (u8)(stickY+127) & 0xFF;
 	else					c->rightStickY = (u8)(-stickY+127) & 0xFF;
@@ -274,12 +377,19 @@ static void rumble(int Control, int rumble){
 }
 
 static void configure(int Control, controller_config_t* config){
+	/*
+	 * analog_fmts maps each analog source enum value to the WPAD data
+	 * format flag that must be OR'd into WPAD_SetDataFormat().
+	 * TILT_STEERING_AS_ANALOG needs WPAD_DATA_ACCEL just like TILT_AS_ANALOG
+	 * and WHEEL_AS_ANALOG — the orient.roll field is derived from accel data.
+	 */
 	static s32 analog_fmts[] = {
-		WPAD_DATA_EXPANSION, // Nunchuk
-		WPAD_DATA_IR,        // IR
-		WPAD_DATA_ACCEL,     // Tilt
-		WPAD_DATA_ACCEL,     // Wheel
-		WPAD_DATA_BUTTONS,   // None
+		WPAD_DATA_EXPANSION, /* NUNCHUK_AS_ANALOG        */
+		WPAD_DATA_IR,        /* IR_AS_ANALOG             */
+		WPAD_DATA_ACCEL,     /* TILT_AS_ANALOG           */
+		WPAD_DATA_ACCEL,     /* WHEEL_AS_ANALOG          */
+		WPAD_DATA_ACCEL,     /* TILT_STEERING_AS_ANALOG  */
+		WPAD_DATA_BUTTONS,   /* NO_ANALOG                */
 	};
 	WPAD_SetDataFormat(Control, analog_fmts[config->analogL->mask] | analog_fmts[config->analogR->mask]);
 }
@@ -328,8 +438,11 @@ controller_t controller_Wiimote =
 	    .exit       = &menu_combos[1], // +&-
 	    .invertedYL = 0,
 	    .invertedYR = 0,
-		.sensitivity = 1.0,
-		.fastf       = &menu_combos[0], // 1+2
+		.sensitivity  = 1.0,
+		.fastf        = &menu_combos[0], // 1+2
+		/* Tilt steering defaults — reasonable for most kart/racing games */
+		.tiltDeadzone = TILT_DEADZONE_DEG,  // 5.0° — absorbs hand-shake
+		.tiltMaxAngle = TILT_MAX_DEG,       // 35.0° — full lock angle
 	  }
 	};
 
@@ -370,8 +483,11 @@ controller_t controller_WiimoteNunchuk =
 	    .exit       = &menu_combos[0], // 1+2
 	    .invertedYL = 0,
 	    .invertedYR = 0,
-		.sensitivity = 1.0,
-		.fastf       = &menu_combos[1], // +&-
+		.sensitivity  = 1.0,
+		.fastf        = &menu_combos[1], // +&-
+		/* Tilt steering defaults */
+		.tiltDeadzone = TILT_DEADZONE_DEG,  // 5.0°
+		.tiltMaxAngle = TILT_MAX_DEG,       // 35.0°
 	  }
 	 };
 

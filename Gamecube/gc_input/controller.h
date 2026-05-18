@@ -75,7 +75,17 @@ typedef struct {
 
 typedef button_t* button_tp;
 
-#define CONTROLLER_CONFIG_VERSION 1
+/* Version 2: added tiltDeadzone and tiltMaxAngle fields.
+ * Incrementing this invalidates version-1 save files so the loader
+ * does not read garbage into the new fields. Users will need to
+ * re-save their button layouts once after updating. */
+#define CONTROLLER_CONFIG_VERSION 2
+
+/* Default tilt-steering values used when initialising a new profile.
+ * Exposed here (not in controller-WiimoteNunchuk.c) so both the C
+ * input module and the C++ menu code share the same constants. */
+#define TILT_DEADZONE_DEG_DEFAULT  5.0f
+#define TILT_MAX_DEG_DEFAULT      35.0f
 typedef struct {
 	button_tp SQU, CRO, CIR, TRI;
 	button_tp R1, L1, R2, L2, R3, L3;
@@ -85,6 +95,13 @@ typedef struct {
 	int invertedYL, invertedYR;
 	float sensitivity;
 	button_tp fastf;
+	/* Tilt-steering per-profile tuning.
+	 * Used only when analogL or analogR is TILT_STEERING_AS_ANALOG.
+	 * tiltDeadzone : degrees of roll treated as zero near centre (default 5.0)
+	 * tiltMaxAngle : degrees of roll that produce the full ±127 output (default 35.0)
+	 * Placed at the end so future fields can still be appended safely. */
+	float tiltDeadzone;
+	float tiltMaxAngle;
 } controller_config_t;
 
 typedef struct HidController

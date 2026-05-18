@@ -67,18 +67,28 @@ void Func_ToggleButtonR3();
 void Func_SensMinus();
 void Func_SensPlus();
 void Func_ToggleGunMouse();
+/* Tilt steering per-profile tuning buttons */
+void Func_TiltDZMinus();   // tiltDeadzone -= 0.5, clamped [0, 15]
+void Func_TiltDZPlus();    // tiltDeadzone += 0.5, clamped [0, 15]
+void Func_TiltMaxMinus();  // tiltMaxAngle -= 1.0, clamped [10, 60]
+void Func_TiltMaxPlus();   // tiltMaxAngle += 1.0, clamped [10, 60]
 
 void Func_ReturnFromConfigureButtonsFrame();
 
 
-#define NUM_FRAME_BUTTONS 30
+/* 30 original buttons + 4 tilt-tuning buttons = 34 total */
+#define NUM_FRAME_BUTTONS 34
 #define FRAME_BUTTONS configureButtonsFrameButtons
 #define FRAME_STRINGS configureButtonsFrameStrings
 #define NUM_FRAME_TEXTBOXES 5
 #define FRAME_TEXTBOXES configureButtonsFrameTextBoxes
 #define TITLE_STRING configureButtonsTitleString
 
-static char FRAME_STRINGS[36][20] =
+/* FRAME_STRINGS layout:
+ * [0-35]  original strings
+ * [36]    live DZ  label  e.g. "DZ: 5.0"
+ * [37]    live Max label  e.g. "Max: 35" */
+static char FRAME_STRINGS[38][20] =
 	{ "Next",
 	  "Default",
 	  "Slot 1",
@@ -114,7 +124,9 @@ static char FRAME_STRINGS[36][20] =
 	  "X+Y",
 	  "Limit FPS:",
 	  "Lift Mouse:",
-	  "Gun/Mouse"};
+	  "Gun/Mouse",
+	  "DZ: 5.0",    /* [36] tilt deadzone live label  */
+	  "Max: 35" };  /* [37] tilt max angle live label */
 
 static char TITLE_STRING[50] = "Gamecube Pad 1 to PSX Pad 1 Mapping";
 
@@ -170,6 +182,12 @@ struct ButtonInfo
 	{	NULL,	BTN_A_NRM,	FRAME_STRINGS[28],	265.0,	340.0,	 50.0,	40.0,	 8,	24,	20,	26,	Func_SensMinus,			Func_ReturnFromConfigureButtonsFrame }, // Stick Sensitivity -
 	{	NULL,	BTN_A_NRM,	FRAME_STRINGS[32],	515.0,	160.0,	110.0,	40.0,   29,	16,	10,	 5,	Func_ToggleButtonFastF,	Func_ReturnFromConfigureButtonsFrame }, // Toggle Button FastForward
 	{	NULL,	BTN_A_SEL,	FRAME_STRINGS[35],	480.0,	 20.0,	140.0,	40.0,	19,	28,	 4,	 0,	Func_ToggleGunMouse,	Func_ReturnFromConfigureButtonsFrame }, // Toggle Gun/Mouse Enable
+	/* Tilt steering tuning row — Deadzone (buttons 30-31) */
+	{NULL, BTN_A_NRM, FRAME_STRINGS[28], 160.0,  455.0,  40.0, 36.0,  27, -1, -1, 31, Func_TiltDZMinus,        Func_ReturnFromConfigureButtonsFrame }, // Tilt DZ -
+	{NULL, BTN_A_NRM, FRAME_STRINGS[31], 240.0,  455.0,  40.0, 36.0,  26, -1, 30, 32, Func_TiltDZPlus,         Func_ReturnFromConfigureButtonsFrame }, // Tilt DZ +
+	/* Tilt steering tuning row — Max Angle (buttons 32-33) */
+	{NULL, BTN_A_NRM, FRAME_STRINGS[28], 360.0,  455.0,  40.0, 36.0,  25, -1, 31, 33, Func_TiltMaxMinus,       Func_ReturnFromConfigureButtonsFrame }, // Tilt Max -
+	{NULL, BTN_A_NRM, FRAME_STRINGS[31], 440.0,  455.0,  40.0, 36.0,  23, -1, 32, -1, Func_TiltMaxPlus,        Func_ReturnFromConfigureButtonsFrame }, // Tilt Max +
 };
 
 struct TextBoxInfo
@@ -463,6 +481,26 @@ void ConfigureButtonsFrame::activateSubmenu(int submenu)
 		if (currentConfig->sensitivity < 0.1) currentConfig->sensitivity = 1.0;
 		sprintf(FRAME_STRINGS[29], "x%.1f", currentConfig->sensitivity);
 		strcpy(FRAME_STRINGS[32], currentConfig->fastf->name);
+
+		/* Guard: if a new config was just memcpy-d from default it will
+		 * have the correct values already; if an older version-1 save
+		 * was somehow loaded they will be 0 — restore sane defaults. */
+		if (currentConfig->tiltDeadzone <= 0.0f)
+			currentConfig->tiltDeadzone = TILT_DEADZONE_DEG_DEFAULT;
+		if (currentConfig->tiltMaxAngle <= 0.0f)
+			currentConfig->tiltMaxAngle = TILT_MAX_DEG_DEFAULT;
+		sprintf(FRAME_STRINGS[36], "DZ:%.1f", currentConfig->tiltDeadzone);
+		sprintf(FRAME_STRINGS[37], "Max:%.0f", currentConfig->tiltMaxAngle);
+
+		/* Show tilt buttons only for Wiimote controller types.
+		 * For all other pad types (GC, Classic, Pro, HID) they are
+		 * hidden so the existing layout is completely unchanged. */
+		bool isTiltCapable = (activePadType == ACTIVEPADTYPE_WIIMOTE ||
+		                      activePadType == ACTIVEPADTYPE_WIIMOTENUNCHUCK);
+		for (int i = 30; i < 34; i++) {
+			FRAME_BUTTONS[i].button->setActive(isTiltCapable);
+			FRAME_BUTTONS[i].button->setVisible(isTiltCapable);
+		}
 	}
 }
 
@@ -879,4 +917,48 @@ void Func_ReturnFromConfigureButtonsFrame()
 {
 	menu::Gui::getInstance().menuLogo->setVisible(true);
 	pMenuContext->setActiveFrame(MenuContext::FRAME_SETTINGS,SettingsFrame::SUBMENU_INPUT);
+}
+
+/* -----------------------------------------------------------------------
+ * Tilt Steering Per-Profile Tuning Handlers
+ * Each function reads the current config, adjusts one value, clamps it
+ * to a sensible range, then refreshes the on-screen label.
+ * ----------------------------------------------------------------------- */
+
+/* Deadzone: step 0.5°, clamped [0°, 15°]
+ * 0° = no dead zone (not recommended — drift will occur)
+ * 15° = very large dead zone for very shaky hands */
+void Func_TiltDZMinus()
+{
+	controller_config_t* cfg = virtualControllers[activePad].config;
+	cfg->tiltDeadzone -= 0.5f;
+	if (cfg->tiltDeadzone < 0.0f) cfg->tiltDeadzone = 0.0f;
+	sprintf(FRAME_STRINGS[36], "DZ:%.1f", cfg->tiltDeadzone);
+}
+
+void Func_TiltDZPlus()
+{
+	controller_config_t* cfg = virtualControllers[activePad].config;
+	cfg->tiltDeadzone += 0.5f;
+	if (cfg->tiltDeadzone > 15.0f) cfg->tiltDeadzone = 15.0f;
+	sprintf(FRAME_STRINGS[36], "DZ:%.1f", cfg->tiltDeadzone);
+}
+
+/* Max Angle: step 1°, clamped [10°, 60°]
+ * 10° = very hair-trigger (tiny tilts = full lock, good for twitchy arcades)
+ * 60° = very gentle (large sweep needed, good for simulation racers) */
+void Func_TiltMaxMinus()
+{
+	controller_config_t* cfg = virtualControllers[activePad].config;
+	cfg->tiltMaxAngle -= 1.0f;
+	if (cfg->tiltMaxAngle < 10.0f) cfg->tiltMaxAngle = 10.0f;
+	sprintf(FRAME_STRINGS[37], "Max:%.0f", cfg->tiltMaxAngle);
+}
+
+void Func_TiltMaxPlus()
+{
+	controller_config_t* cfg = virtualControllers[activePad].config;
+	cfg->tiltMaxAngle += 1.0f;
+	if (cfg->tiltMaxAngle > 60.0f) cfg->tiltMaxAngle = 60.0f;
+	sprintf(FRAME_STRINGS[37], "Max:%.0f", cfg->tiltMaxAngle);
 }

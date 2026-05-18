@@ -225,6 +225,9 @@ int load_configurations(FILE* f, controller_t* controller){
 		fread(&controller->config_slot[i].invertedYL, 4, 1, f);
 		fread(&controller->config_slot[i].invertedYR, 4, 1, f);
 		fread(&controller->config_slot[i].sensitivity, 4, 1, f);
+		/* v2: tilt steering per-profile tuning */
+		fread(&controller->config_slot[i].tiltDeadzone, 4, 1, f);
+		fread(&controller->config_slot[i].tiltMaxAngle, 4, 1, f);
 		controller->config_slot[i].fastf =
 			getPointer(controller->menu_combos, controller->num_menu_combos);
 	}
@@ -274,6 +277,9 @@ void save_configurations(FILE* f, controller_t* controller){
 		fwrite(&controller->config_slot[i].invertedYL, 4, 1, f);
 		fwrite(&controller->config_slot[i].invertedYR, 4, 1, f);
 		fwrite(&controller->config_slot[i].sensitivity, 4, 1, f);
+		/* v2: tilt steering per-profile tuning */
+		fwrite(&controller->config_slot[i].tiltDeadzone, 4, 1, f);
+		fwrite(&controller->config_slot[i].tiltMaxAngle, 4, 1, f);
 		fwrite(&controller->config_slot[i].fastf->index, 4, 1, f);
 	}
 }
