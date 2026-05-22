@@ -62,7 +62,7 @@ void (*psxSPC[64])();
 void (*psxREG[32])();
 void (*psxCP0[32])();
 void (*psxCP2[64])(struct psxCP2Regs *regs);
-void (*psxCP2BSC[32])();
+void (*psxCP2BSC[32])(struct psxCP2Regs *regs);
 
 static void delayRead(int reg, u32 bpc) {
 	u32 rold, rnew;
@@ -985,7 +985,7 @@ void (*psxCP2[64])(struct psxCP2Regs *regs) = {
 	psxNULL , psxNULL , psxNULL , psxNULL, psxNULL, gteGPF  , gteGPL  , gteNCCT  // 38
 };
 
-void (*psxCP2BSC[32])() = {
+void (*psxCP2BSC[32])(struct psxCP2Regs *regs) = {
 	gteMFC2, psxNULL, gteCFC2, psxNULL, gteMTC2, psxNULL, gteCTC2, psxNULL,
 	psxNULL, psxNULL, psxNULL, psxNULL, psxNULL, psxNULL, psxNULL, psxNULL,
 	psxNULL, psxNULL, psxNULL, psxNULL, psxNULL, psxNULL, psxNULL, psxNULL,

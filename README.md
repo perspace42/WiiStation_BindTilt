@@ -88,7 +88,20 @@ with defaults. You will need to re-save your button layouts once after updating.
 
 ---
 
-See [`build_instructions.md`](build_instructions.md) for the full build and Wii U port guide.  
+## Next Steps / Installation (vWii on Aroma)
+
+Once you have successfully built the project (or downloaded a release), you need to place the compiled `.dol` file on your SD card so it can be launched via the Homebrew Channel on your Wii or vWii (Wii U).
+
+For a **vWii running via Aroma** on the Wii U:
+1. Rename the compiled `WiiSXRX_debug.dol` to `boot.dol`.
+2. Place it on your SD card in the following folder structure:
+   ```
+   sd:/apps/wiisxrx/boot.dol
+   ```
+3. *(Optional)* Add a `meta.xml` and `icon.png` to the same folder so it shows up nicely in the Homebrew Channel.
+4. Boot into your vWii, launch the Homebrew Channel, and select WiiStation!
+
+See [`build_instructions.md`](build_instructions.md) for the full build guide and Podman/Docker instructions.  
 See [`TILT_STEERING_IMPLEMENTATION.md`](TILT_STEERING_IMPLEMENTATION.md) for a technical deep-dive on tilt vs. analog stick mechanics and the full code architecture.
 
 ---

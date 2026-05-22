@@ -22,9 +22,11 @@ INSTALL_LIB_DIR		?= $(PORTLIBS_PATH)/wii/lib
 # Tools.
 PIPE_TO_SED := 2>&1 | sed "s/:\([0-9]*\):/\(\1\) :/"
 
-# Library source files.
-SDL_SRCS	:= \
-	$(wildcard $(ZLIBSTLIB_SRC_DIR)/*.c)
+# Exclude gz*.c — they use POSIX file I/O (lseek/read/write/close)
+# not available in devkitPPC/newlib. libchdr only needs the core
+# inflate/deflate engine, not the gzip file-I/O layer.
+SDL_SRCS	:= $(filter-out $(ZLIBSTLIB_SRC_DIR)/gz%.c, \
+	               $(wildcard $(ZLIBSTLIB_SRC_DIR)/*.c))
 
 # Library object files.
 ZLIBSTLIB_OBJS	:= $(subst $(ZLIBSTLIB_SRC_DIR),$(ZLIBSTLIB_OBJ_DIR),$(SDL_SRCS:.c=.o))

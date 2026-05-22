@@ -1,190 +1,124 @@
 # WiiStation — Build & Wii U Port Instructions
 
-## Prerequisites
+This project requires a specific, older version of devkitPPC to compile properly. Modern devkitPPC versions (like those currently on Docker Hub or pacman) have linker changes that cause `R_PPC_REG` and startup symbol errors (`__app_start`, `_SDA_BASE_`, etc.).
 
-WiiStation is built using the **devkitPro** toolchain targeting the Wii (PowerPC).
-You need these components installed and available on your `PATH`:
-
-| Component | Version | Source |
-|---|---|---|
-| devkitPPC | r41-2 | https://wii.leseratte10.de/devkitPro/ |
-| libogc2 | up to commit `7456c4ab` | Included in `lightrec+Libogc2.zip` |
-| SDL (Wii port) | — | `libSDL.a` in repo root |
-| GNU Lightning + Lightrec | — | `lightrec+Libogc2.zip` in repo root |
-
-> **Tip:** The repo includes pre-compiled zip archives (`lightrec+Libogc2.zip`,
-> `libSDL.a`, `LightrecByPPC29Libogc1.6.zip`) containing all Wii-specific libraries.
-> Extract them to your devkitPro environment before building.
+**Required Toolchain:**
+- **devkitPPC r41-2**
+- **libOGC2 (up to git 7456c4ab) + SDL + GNU Lightning + Lightrec**
 
 ---
 
-## Setting Up the Build Environment
+## Where to Place the Files (Native/Manual Setup)
 
-### 1. Install devkitPro on Linux / macOS / WSL
+If you are setting this up on your host OS (Windows/Linux) or building a custom Docker container, follow these steps to place the files in the correct directories:
+
+### 1. Install devkitPPC r41-2
+1. Download **devkitPPC r41-2** for your OS from the archive:
+   [https://wii.leseratte10.de/devkitPro/](https://wii.leseratte10.de/devkitPro/)
+2. Extract the archive.
+3. Place the `devkitPPC` folder in your devkitPro directory (e.g., `C:\devkitPro\devkitPPC` on Windows, or `/opt/devkitpro/devkitPPC` on Linux).
+4. Ensure your environment variables are set:
+   - `DEVKITPRO` points to your devkitPro base folder (e.g., `/opt/devkitpro`)
+   - `DEVKITPPC` points to the devkitPPC folder (e.g., `/opt/devkitpro/devkitPPC`)
+
+### 2. Install the modified base rules and libogc2
+1. Download the `lightrec+Libogc2.zip` archive containing the modified rules and compiled libraries:
+   [https://github.com/xjsxjs197/WiiSXRX_2022/raw/main/lightrec+Libogc2.zip](https://github.com/xjsxjs197/WiiSXRX_2022/raw/main/lightrec+Libogc2.zip)
+2. Extract the ZIP file. You will see two folders: `devkitPPC` and `libogc2`.
+3. **Copy the contents of the extracted `devkitPPC` folder** and overwrite the files in your installation's `devkitPPC` folder (specifically `devkitPPC/base_rules`).
+4. **Copy the extracted `libogc2` folder** into your devkitPro base directory (e.g., `/opt/devkitpro/libogc2`).
+
+### 3. Install the compiled SDL library
+1. Download `libSDL.a` from:
+   [https://github.com/xjsxjs197/WiiSXRX_2022/raw/main/libSDL.a](https://github.com/xjsxjs197/WiiSXRX_2022/raw/main/libSDL.a)
+2. Place this `libSDL.a` file into your libogc2 Wii library folder, overwriting the existing one if necessary:
+   `/opt/devkitpro/libogc2/lib/wii/libSDL.a` (or `C:\devkitPro\libogc2\lib\wii\libSDL.a`)
+
+---
+
+## How to Build
+
+Once your environment is set up with the specific old versions and files placed correctly, you can build the emulator:
+
+### 1. Build the Source Dependencies (First Time Only)
+
+Open a terminal (or your MSYS2/Docker shell), navigate to the root of the repository (`WiiStation_BindTilt`), and run the dependency build script:
 
 ```bash
-# Install the devkitPro pacman helper
-curl -L https://github.com/devkitPro/pacman/releases/latest/download/devkitpro-pacman-installer.sh | bash
-
-# Install the Wii toolchain packages
-dkp-pacman -S devkitPPC libogc wii-dev
+cd WiiStation_BindTilt
+bash build_deps.sh
 ```
 
-### 2. Install devkitPro on Windows (native)
+This will compile `zlib`, `libchdr`, and `opengx`.
 
-Download the installer from https://devkitpro.org/wiki/Getting_Started and follow
-the Windows instructions. Install the **Wii** component group.
+### 2. Build the WiiStation Executable
 
-> **Recommended:** Use WSL 2 (Windows Subsystem for Linux) for the smoothest
-> build experience. The toolchain works natively on Linux without path issues.
-
-### 3. Extract the pre-built libraries
+Navigate to the `Gamecube` folder and run `make`:
 
 ```bash
-# Inside the WiiStation_BindTilt repo root:
-unzip lightrec+Libogc2.zip
-# Copy / overwrite the extracted files into $DEVKITPRO/portlibs/wii/
-# (the zip contains portlibs-layout-compatible paths)
+cd Gamecube
+make -f Makefile_Wii
 ```
 
-### 4. Set environment variables
+This will produce `WiiSXRX_debug.elf` and `WiiSXRX_debug.dol`.
+
+---
+
+## Container Alternative (Recommended)
+
+If you don't want to pollute your host system with old devkitPPC versions, you can use Podman or Docker to build an image that does all the manual file placement for you:
+
+### 1. Place Required Files in the `vendor/devkitPPC/` directory
+Ensure the following files are downloaded and placed into `vendor/devkitPPC/` inside your project:
+- `devkitPPC-r41-2-linux_x86_64.pkg.tar.xz`
+- `libSDL.a`
+
+*(The `lightrec+Libogc2` ZIP will be automatically downloaded by the Dockerfile during the build).*
+
+### 2. Create the `Dockerfile.build`
+Create a file named `Dockerfile.build` in the root of the repo with these contents:
+
+```dockerfile
+FROM devkitpro/devkitppc:latest
+
+USER root
+RUN apt-get update && apt-get install -y wget unzip xz-utils
+
+# 1. Overwrite modern devkitPPC with r41-2 from local vendor file
+COPY WiiStation_BindTilt/vendor/devkitPPC/devkitPPC-r41-2-linux_x86_64.pkg.tar.xz /tmp/
+RUN rm -rf /opt/devkitpro/devkitPPC/bin /opt/devkitpro/devkitPPC/lib /opt/devkitpro/devkitPPC/powerpc-eabi && \
+    cd / && \
+    tar -xf /tmp/devkitPPC-r41-2-linux_x86_64.pkg.tar.xz && \
+    rm /tmp/devkitPPC-r41-2-linux_x86_64.pkg.tar.xz
+
+# 2. Download and apply lightrec+Libogc2 (modified base_rules + libogc2 runtime)
+RUN cd /tmp && \
+    wget -q https://github.com/xjsxjs197/WiiSXRX_2022/raw/main/lightrec+Libogc2.zip && \
+    unzip -qo lightrec+Libogc2.zip && \
+    cp -r lightrec+Libogc2/devkitPPC/* /opt/devkitpro/devkitPPC/ && \
+    cp -r lightrec+Libogc2/libogc2 /opt/devkitpro/ && \
+    rm -rf lightrec+Libogc2 lightrec+Libogc2.zip
+
+# 3. Install compiled libSDL.a from local vendor file
+COPY WiiStation_BindTilt/vendor/devkitPPC/libSDL.a /opt/devkitpro/libogc2/lib/wii/libSDL.a
+
+# 4. Create wii_rules symlink so dep Makefiles resolve correctly
+RUN ln -sf /opt/devkitpro/libogc2/wii_rules /opt/devkitpro/devkitPPC/wii_rules
+
+ENV PATH="/opt/devkitpro/devkitPPC/bin:${PATH}"
+WORKDIR /src
+```
+
+### 3. Build and Run the Container
+
+From the **parent directory** of the `WiiStation_BindTilt` repo (so that the `COPY` commands work correctly), run:
 
 ```bash
-export DEVKITPRO=/opt/devkitpro
-export DEVKITPPC=$DEVKITPRO/devkitPPC
-export PATH=$DEVKITPPC/bin:$PATH
+# Build the image (one time)
+podman build --no-cache -t wiistation-r41 -f WiiStation_BindTilt/Dockerfile.build .
+
+# Open a shell inside the container
+podman run --rm -it -v "${PWD}:/src" -w /src/WiiStation_BindTilt localhost/wiistation-r41 bash
 ```
 
----
-
-## Building the Project
-
-Run from the **repo root** (`WiiStation_BindTilt/`):
-
-```bash
-# Release build (Wii target, uses Lightrec dynarec)
-make -f Gamecube/Makefile_Wii
-
-# If you want the older PPC dynarec variant:
-# make -f Gamecube/Makefile_Wii_Release
-```
-
-Successful output ends with something like:
-
-```
-linking ... boot.elf
-built ... boot.dol
-```
-
-The deliverable is **`boot.dol`** in the repo root (or `Gamecube/release/`).
-
-### Cleaning
-
-```bash
-make -f Gamecube/Makefile_Wii clean
-```
-
----
-
-## Installing on a Real Wii (SD / USB)
-
-1. Format your SD card as FAT32.
-2. Place a Homebrew Channel boot file at:
-   ```
-   sd:/apps/WiiStation/boot.dol
-   sd:/apps/WiiStation/meta.xml   ← optional, describe the app
-   ```
-3. Create the data directory:
-   ```
-   sd:/wiisxrx/isos/     ← put PS1 game images here (.bin/.cue, .iso, .chd, .pbp)
-   sd:/wiisxrx/bios/     ← put SCPH-xxxx.bin BIOS here (optional but recommended)
-   sd:/wiisxrx/fonts/chs.dat   ← required font file (included in original releases)
-   ```
-4. Launch via **Homebrew Channel** on the Wii.
-
----
-
-## Porting to Wii U (vWii Mode)
-
-The Wii U contains a full virtual Wii (vWii) core. WiiStation runs on vWii **without
-recompilation** — the same `boot.dol` used on a real Wii works identically.
-
-### Method 1 — Homebrew Launcher (recommended)
-
-1. **Exploit the Wii U** using an existing Wii U browser or Haxchi exploit:
-   - Follow https://wiiu.hacks.guide for the current recommended method.
-   - Install the **Homebrew Launcher** channel.
-
-2. **Enable vWii** from the Wii U menu and access the **Wii System Menu**.
-
-3. Install the **Homebrew Channel** inside vWii:
-   - From the Homebrew Launcher, launch `homebrew_channel_installer.elf`
-     (available from https://wiibrew.org/wiki/Homebrew_Channel).
-
-4. Copy your WiiStation files to the SD card exactly as described in
-   "Installing on a Real Wii" above. The Wii U reads the same SD slot in vWii mode.
-
-5. Launch WiiStation from the vWii Homebrew Channel.
-
-### Method 2 — Wii U Forwarder Channel
-
-Install a Wii U forwarder `.wup` that launches vWii homebrew directly from the
-Wii U menu without entering vWii first.  Tools like **WUHB Forwarder** or
-**WiiVC Injector** can create this from your `boot.dol`.
-
-### Known vWii Differences
-
-| Feature | Real Wii | vWii on Wii U |
-|---|---|---|
-| Wiimote tilt/accel | ✓ Full support | ✓ Full support |
-| Wii U GamePad | ✗ Not available | ✓ Supported (mapped as Wiimote alt) |
-| Wii U Pro Controller | ✗ Not available | ✓ Works via BT stack |
-| SD card path | `sd:/` | `sd:/` (same) |
-| USB storage | ✓ | ✓ (some adapters may differ) |
-| Performance | Baseline | Identical to real Wii |
-
-> **Tilt Steering on vWii:** Wii Remotes pair to the Wii U's Bluetooth exactly as on
-> a real Wii, so the new **Tilt Steering** analog source works without any changes.
-
----
-
-## Enabling the Tilt Steering Binding (New Feature)
-
-1. Launch WiiStation and load a game.
-2. Press **Home** (or your configured menu button) to open the emulator menu.
-3. Go to **Settings → Configure Buttons**.
-4. Your current controller (Wiimote or Wiimote+Nunchuk) should be shown.
-5. Navigate to **Analog Stick L** and press A/click to cycle the source.
-6. Select **"Tilt Steering"**.
-7. *(Optional)* Adjust **Sensitivity** with the `−` / `+` buttons.
-8. Press **Save** to store the mapping to a configuration slot.
-
-### Tuning Feel
-
-Edit these two `#define`s near the top of
-`Gamecube/gc_input/controller-WiimoteNunchuk.c` and rebuild:
-
-```c
-#define TILT_DEADZONE_DEG  5.0f   // angle (degrees) ignored near centre
-#define TILT_MAX_DEG      35.0f   // angle (degrees) mapped to full ±127 output
-```
-
-| If the kart… | Adjust… |
-|---|---|
-| Drifts when remote is level | Increase `TILT_DEADZONE_DEG` |
-| Feels sluggish to steer | Decrease `TILT_MAX_DEG` |
-| Turns too sharply on small tilts | Increase `TILT_MAX_DEG` |
-| Still drifts after deadzone change | Decrease `TILT_DEADZONE_DEG` |
-
----
-
-## Troubleshooting
-
-| Symptom | Likely Cause | Fix |
-|---|---|---|
-| `boot.dol` not found by HBC | Wrong directory structure | Ensure `sd:/apps/WiiStation/boot.dol` |
-| Font/text missing | `chs.dat` absent | Copy `fonts/chs.dat` to `sd:/wiisxrx/fonts/` |
-| Game won't load | BIOS missing | Place a `BIOS/SCPH-XXXX.bin` in `sd:/wiisxrx/bios/` |
-| Tilt Steering not in menu | Old saved config loaded | Switch to Default config in Configure Buttons |
-| Build fails: `libogc not found` | Libraries not extracted | Unzip `lightrec+Libogc2.zip` into devkitPro |
-| Wiimote not responding in vWii | Pairing lost | Re-sync Wiimote using red button on Wii U back |
+Inside the container, run `bash build_deps.sh` and `make -f Makefile_Wii` as described in the "How to Build" section.

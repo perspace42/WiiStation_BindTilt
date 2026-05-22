@@ -249,6 +249,7 @@ static int _GetKeys(int Control, BUTTONS * Keys, controller_config_t* config,
 			stickX = (s8)(curved * 127.0f * config->sensitivity);
 			stickY = 0; /* pitch not used — set to centre */
 		}
+	} /* end else if(TILT_STEERING_AS_ANALOG) */
 	c->leftStickX  = (u8)(stickX+127) & 0xFF;
 	if(config->invertedYL)	c->leftStickY = (u8)(stickY+127) & 0xFF;
 	else					c->leftStickY = (u8)(-stickY+127) & 0xFF;
@@ -289,6 +290,7 @@ static int _GetKeys(int Control, BUTTONS * Keys, controller_config_t* config,
 			stickX = (s8)(curved * 127.0f * config->sensitivity);
 			stickY = 0;
 		}
+	} /* end else if(TILT_STEERING_AS_ANALOG) */
 	c->rightStickX  = (u8)(stickX+127) & 0xFF;
 	if(config->invertedYR)	c->rightStickY = (u8)(stickY+127) & 0xFF;
 	else					c->rightStickY = (u8)(-stickY+127) & 0xFF;

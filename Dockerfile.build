@@ -1,0 +1,31 @@
+FROM devkitpro/devkitppc:latest
+
+USER root
+RUN apt-get update && apt-get install -y wget unzip xz-utils
+
+# 1. Overwrite modern devkitPPC with r41-2 from local vendor file
+COPY WiiStation_BindTilt/vendor/devkitPPC/devkitPPC-r41-2-linux_x86_64.pkg.tar.xz /tmp/
+RUN rm -rf /opt/devkitpro/devkitPPC/bin /opt/devkitpro/devkitPPC/lib /opt/devkitpro/devkitPPC/powerpc-eabi && \
+    cd / && \
+    tar -xf /tmp/devkitPPC-r41-2-linux_x86_64.pkg.tar.xz && \
+    rm /tmp/devkitPPC-r41-2-linux_x86_64.pkg.tar.xz
+
+# 2. Download and apply lightrec+Libogc2 (modified base_rules + libogc2 runtime)
+RUN cd /tmp && \
+    wget -q https://github.com/xjsxjs197/WiiSXRX_2022/raw/main/lightrec+Libogc2.zip && \
+    unzip -qo lightrec+Libogc2.zip && \
+    cp -r lightrec+Libogc2/devkitPPC/* /opt/devkitpro/devkitPPC/ && \
+    cp -r lightrec+Libogc2/libogc2 /opt/devkitpro/ && \
+    rm -rf lightrec+Libogc2 lightrec+Libogc2.zip
+
+# 3. Install compiled libSDL.a from local vendor file
+COPY WiiStation_BindTilt/vendor/devkitPPC/libSDL.a /opt/devkitpro/libogc2/lib/wii/libSDL.a
+
+# 4. Create wii_rules symlink so dep Makefiles (opengx, libchdr, zlib)
+#    that `include $(DEVKITPPC)/wii_rules` resolve correctly
+RUN ln -sf /opt/devkitpro/libogc2/wii_rules /opt/devkitpro/devkitPPC/wii_rules
+
+# Setup PATH so powerpc-eabi-gcc is found
+ENV PATH="/opt/devkitpro/devkitPPC/bin:${PATH}"
+
+WORKDIR /src

@@ -890,7 +890,7 @@ void glBegin(GLenum mode)
     glparamstate.imm_mode.prim_type = mode;
     if (!glparamstate.imm_mode.current_vertices) {
         int count = 64;
-        void *buffer = _mem2_malloc(count * sizeof(VertexData));
+        void *buffer = _mem2_memalign(32, count * sizeof(VertexData));
         if (buffer) {
             glparamstate.imm_mode.current_vertices = buffer;
             glparamstate.imm_mode.current_vertices_size = count;
