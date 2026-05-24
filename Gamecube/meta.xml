@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+ <app version="2">
+   <name>WiiStation BindTilt</name>
+   <coder>Scott Field (Forked from xjsxjs197)</coder>
+   <version>3.2-tilt</version>
+   <release_date>20260521</release_date>
+   <short_description>PSX Emulator with Wiimote Tilt Steering</short_description>
+   <long_description>
+WiiStation BindTilt - A Sony PlayStation 1 emulator for Wii / Wii U, featuring a new Wiimote Tilt Steering mode designed for racing games!
+
+New in this fork:
+- Wiimote Tilt Steering: Hold the Wiimote horizontally and tilt left/right to steer.
+- Fully customizable deadzone and max tilt angles per profile.
+- Square-root analog response curve for fine control near the center.
+
+Original Features:
+- Dynamic recompiler (dynarec) Lightrec.
+- CDDA (Compact Disc Digital Audio) tracks support.
+- 240p &amp; Interlaced (480i) modes.
+- Lightgun and Multitap support.
+- Multiple languages support.
+- Support for GameCube, Wii U Pro, Wii Classic, and HID controllers.
+
+* WiiSX/CubeSX is a PCSX port. The original team was:
+emu_kidid - general coding
+sepp256 - graphics and menu
+tehpola - audio
+* Later updates by:
+matguitarist
+Daxtsu
+Mystro256
+FIX94
+NiuuS
+xjsxjs197
+saulfabregwiivc
+Jokippo
+   </long_description>
+   <ahb_access/>
+ </app>

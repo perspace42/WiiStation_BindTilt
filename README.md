@@ -90,15 +90,17 @@ with defaults. You will need to re-save your button layouts once after updating.
 
 ## Next Steps / Installation (vWii on Aroma)
 
-Once you have successfully built the project (or downloaded a release), you need to place the compiled `.dol` file on your SD card so it can be launched via the Homebrew Channel on your Wii or vWii (Wii U).
+Once you have successfully built the project (or downloaded a release), you need to place the compiled `.dol` file on your SD card so it can be launched via the Homebrew Channel on your Wii or vWii (Wii U). 
+
+*(Note: The `WiiSXRX_debug.elf` file is only needed for developers using a USB Gecko debugger or similar development setups. Regular users can ignore or delete it.)*
 
 For a **vWii running via Aroma** on the Wii U:
-1. Rename the compiled `WiiSXRX_debug.dol` to `boot.dol`.
-2. Place it on your SD card in the following folder structure:
+1. Copy the compiled `Gamecube/WiiSXRX_debug.dol` to your SD card, renaming it to `boot.dol`.
+2. Place it in the following folder structure:
    ```
    sd:/apps/wiisxrx/boot.dol
    ```
-3. *(Optional)* Add a `meta.xml` and `icon.png` to the same folder so it shows up nicely in the Homebrew Channel.
+3. Copy the `meta.xml` and `icon.png` files from the `Gamecube/` folder and place them alongside `boot.dol` so it shows up with the custom icon and description in the Homebrew Channel.
 4. Boot into your vWii, launch the Homebrew Channel, and select WiiStation!
 
 See [`build_instructions.md`](build_instructions.md) for the full build guide and Podman/Docker instructions.  

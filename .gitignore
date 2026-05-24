@@ -6,6 +6,7 @@ Gamecube/*.elf
 Gamecube/build_debug/*.*
 Gamecube/build_release/*.*
 deps/lightrec/lib/*
+ai_instructions/
 
 deps/libchdr/lib/libchdr.a
 deps/libchdr/deps/lzma-19.00/lib/liblzma.a
