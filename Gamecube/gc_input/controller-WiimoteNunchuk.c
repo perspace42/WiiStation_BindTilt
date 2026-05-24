@@ -213,9 +213,9 @@ static int _GetKeys(int Control, BUTTONS * Keys, controller_config_t* config,
 			 * When held horizontal (buttons facing right):
 			 *   tilting left/right rotates around the Z-forward axis,
 			 *   so roll = atan2(x - 512, z - 512) in radians. */
-			float ax = (float)((s32)wpad->accel.x - 512);
+			float ay = (float)(512 - (s32)wpad->accel.y);
 			float az = (float)((s32)wpad->accel.z - 512);
-			float roll_rad = atan2f(ax, az);
+			float roll_rad = atan2f(ay, az);
 			float roll = roll_rad * (180.0f / PI); /* convert to degrees */
 
 			/* Per-profile tuning values */
@@ -234,22 +234,14 @@ static int _GetKeys(int Control, BUTTONS * Keys, controller_config_t* config,
 			/* Step 4: normalise to [-1.0, +1.0] */
 			float norm = roll / max;
 
-			/* Step 5: cubic response curve (x^3)
-			 * Gentle near centre (stable straight driving),
-			 * aggressive at extremes (strong cornering).
-			 * Per Mario Kart reference: "Do NOT use linear." */
-			float curved = norm * norm * norm;
-
-			/* Step 6: exponential smoothing
-			 * Damps jitter from raw accelerometer, creates the
-			 * slightly soft/laggy feel of original Wii steering. */
-			static float smoothL = 0.0f;
-			float resp = 8.0f;    /* responsiveness (6-10 range) */
-			float dt   = 1.0f / 60.0f; /* assume ~60fps */
-			smoothL += (curved - smoothL) * resp * dt;
-
+			/* Step 5 & 6: Linear response & Direct output
+			 * PS1 games expect a snappy, linear thumbstick with zero lag.
+			 * We map the normalized tilt directly to the output without 
+			 * artificial delay or cubic crushing. */
+			float curved = norm;
+			
 			/* Step 7: scale to s8 range */
-			stickX = (s8)(smoothL * 127.0f * config->sensitivity);
+			stickX = (s8)(curved * 127.0f * config->sensitivity);
 			stickY = 0;
 		}
 	} /* end else if(TILT_STEERING_AS_ANALOG) */
@@ -279,9 +271,9 @@ static int _GetKeys(int Control, BUTTONS * Keys, controller_config_t* config,
 	} else if(config->analogR->mask == TILT_STEERING_AS_ANALOG){
 		/* Same steering-tilt logic as analogL — see comment block above */
 		{
-			float ax = (float)((s32)wpad->accel.x - 512);
+			float ay = (float)(512 - (s32)wpad->accel.y);
 			float az = (float)((s32)wpad->accel.z - 512);
-			float roll_rad = atan2f(ax, az);
+			float roll_rad = atan2f(ay, az);
 			float roll = roll_rad * (180.0f / PI);
 			float dz  = config->tiltDeadzone;
 			float max = config->tiltMaxAngle;
@@ -291,12 +283,8 @@ static int _GetKeys(int Control, BUTTONS * Keys, controller_config_t* config,
 			if (roll >  max) roll =  max;
 			if (roll < -max) roll = -max;
 			float norm = roll / max;
-			float curved = norm * norm * norm;
-			static float smoothR = 0.0f;
-			float resp = 8.0f;
-			float dt   = 1.0f / 60.0f;
-			smoothR += (curved - smoothR) * resp * dt;
-			stickX = (s8)(smoothR * 127.0f * config->sensitivity);
+			float curved = norm;
+			stickX = (s8)(curved * 127.0f * config->sensitivity);
 			stickY = 0;
 		}
 	} /* end else if(TILT_STEERING_AS_ANALOG) */
