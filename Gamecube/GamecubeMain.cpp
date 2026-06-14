@@ -243,6 +243,48 @@ static void loadSeparatelySetting();
 static bool loadSeparatelySettingItem(char* s1, char* s2, bool isUsb);
 void biosFileInit();
 
+static bool loadGameControllerMapping(char* usbSd, char* cdromId)
+{
+    char settingPathBuf[256];
+    FILE* f;
+    bool loadRet = true;
+
+    sprintf(settingPathBuf, "%s:/wiisxrx/controllers/%s_controlG.cfg", usbSd, cdromId);
+    f = fopen(settingPathBuf, "rb" );
+    if (f) {
+        load_configurations(f, &controller_GC);
+        fclose(f);
+    } else { loadRet = false; }
+
+    #ifdef HW_RVL
+    sprintf(settingPathBuf, "%s:/wiisxrx/controllers/%s_controlH.cfg", usbSd, cdromId);
+    f = fopen(settingPathBuf, "rb" );
+    if (f) { load_configurations(f, &controller_HidGC); fclose(f); } else { loadRet = false; }
+
+    sprintf(settingPathBuf, "%s:/wiisxrx/controllers/%s_controlC.cfg", usbSd, cdromId);
+    f = fopen(settingPathBuf, "rb" );
+    if (f) { load_configurations(f, &controller_Classic); fclose(f); } else { loadRet = false; }
+
+    sprintf(settingPathBuf, "%s:/wiisxrx/controllers/%s_controlN.cfg", usbSd, cdromId);
+    f = fopen(settingPathBuf, "rb" );
+    if (f) { load_configurations(f, &controller_WiimoteNunchuk); fclose(f); } else { loadRet = false; }
+
+    sprintf(settingPathBuf, "%s:/wiisxrx/controllers/%s_controlW.cfg", usbSd, cdromId);
+    f = fopen(settingPathBuf, "rb" );
+    if (f) { load_configurations(f, &controller_Wiimote); fclose(f); } else { loadRet = false; }
+
+    sprintf(settingPathBuf, "%s:/wiisxrx/controllers/%s_controlP.cfg", usbSd, cdromId);
+    f = fopen(settingPathBuf, "rb" );
+    if (f) { load_configurations(f, &controller_WiiUPro); fclose(f); } else { loadRet = false; }
+
+    sprintf(settingPathBuf, "%s:/wiisxrx/controllers/%s_controlD.cfg", usbSd, cdromId);
+    f = fopen(settingPathBuf, "rb" );
+    if (f) { load_configurations(f, &controller_WiiUGamepad); fclose(f); } else { loadRet = false; }
+    #endif // HW_RVL
+
+    return loadRet;
+}
+
 static void setGpuPlugin()
 {
     // Set Gpu Plugin
@@ -355,11 +397,7 @@ void loadSettings(int argc, char *argv[])
 	// Default Settings
 	audioEnabled     = 1; // Audio
 	spuInterpolation = SIMPLE_INTERPOLATION;
-#ifdef RELEASE
 	showFPSonScreen  = 0; // Don't show FPS on Screen
-#else
-	showFPSonScreen  = 1; // Show FPS on Screen
-#endif
 	printToScreen    = 1; // Show DEBUG text on screen
 	printToSD        = 0; // Disable SD logging
 	frameLimit[1]		 = 1; // Auto limit FPS
@@ -383,9 +421,9 @@ void loadSettings(int argc, char *argv[])
 	padAssign[1]	 = PADASSIGN_INPUT1;
 	memCard[0]		 = MEMCARD_ENABLE;
 	memCard[1]		 = MEMCARD_ENABLE;
-	rumbleEnabled	 = RUMBLE_ENABLE;
+	rumbleEnabled	 = RUMBLE_DISABLE;
 	loadButtonSlot	 = LOADBUTTON_DEFAULT;
-	controllerType	 = CONTROLLERTYPE_STANDARD;
+	controllerType	 = CONTROLLERTYPE_ANALOG;
 	numMultitaps	 = MULTITAPS_NONE;
 	menuActive = 1;
 	forceNTSC 		 = FORCENTSC_DISABLE;
@@ -709,15 +747,17 @@ static void loadSeparatelySetting()
         }
     }
 
-    // If the loadButton Slot changes, reload the key mapping
-    if (oldLoadButtonSlot != loadButtonSlot)
+    // Try to load per-game controller mappings from USB
+    if (!loadGameControllerMapping("usb", CdromId))
     {
-        // Load button mapping from USB
-        if (!loadControllerMapping("usb"))
+        // If not found, try per-game from SD
+        if (!loadGameControllerMapping("sd", CdromId))
         {
-            // If the key mapping in USB does not exist
-            // Load button mapping from SD
-            loadControllerMapping("sd");
+            // If neither have per-game mappings, load global mappings
+            if (!loadControllerMapping("usb"))
+            {
+                loadControllerMapping("sd");
+            }
         }
     }
 

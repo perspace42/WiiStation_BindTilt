@@ -216,14 +216,14 @@ void Func_ExitToLoader()
 {
     if (menu::MessageBox::getInstance().askMessage("Are you sure you want to exit to loader?"))
     {
-        #ifdef HW_RVL
-        HIDClose(0);
-        #endif
-        shutdown = 2;
         if (hasLoadedISO)
         {
             SysClose();
         }
+        #ifdef HW_RVL
+        HIDClose(0);
+        #endif
+        shutdown = 2;
     }
 }
 

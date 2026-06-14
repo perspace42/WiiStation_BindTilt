@@ -96,6 +96,8 @@ void Func_DisableRumbleYes();
 void Func_DisableRumbleNo();
 void Func_SaveButtonsSD();
 void Func_SaveButtonsUSB();
+void Func_SaveDefaultButtonsSD();
+void Func_SaveDefaultButtonsUSB();
 void Func_SetButtonLoad();
 void Func_ToggleButtonLoad();
 
@@ -153,7 +155,7 @@ void gpuChangePsxType();
 void setSpuInterpolation(int spuInterpolation);
 }
 
-#define NUM_FRAME_BUTTONS 67
+#define NUM_FRAME_BUTTONS 69
 #define NUM_TAB_BUTTONS 5
 #define FRAME_BUTTONS settingsFrameButtons
 #define FRAME_STRINGS settingsFrameStrings
@@ -403,6 +405,8 @@ struct ButtonInfo
 	{	NULL,	BTN_A_SEL,	GPU_PLUGIN_STRINGS[1],	215.0,	160.0,	140.0,	56.0,	 5,	 7,	 66, 65,Func_UseOldSoftGpu,		Func_ReturnFromSettingsFrame }, // GpuPlugin: Old Soft
 	{	NULL,	BTN_A_SEL,	GPU_PLUGIN_STRINGS[2],	365.0,	160.0,	130.0,	56.0,	 6,	 9,	 64, 66,Func_UseNewSoftGpu,		Func_ReturnFromSettingsFrame }, // GpuPlugin: New Soft
 	{	NULL,	BTN_A_SEL,	GPU_PLUGIN_STRINGS[3],	505.0,	160.0,	130.0,	56.0,	 6,	 9,	 65, 64,Func_UseOpenGxGpu,		Func_ReturnFromSettingsFrame }, // GpuPlugin: OpenGX
+	{	NULL,	BTN_A_NRM,	"Def SD",	430.0,	310.0,	 70.0,	56.0,	36,	 2,	 68, 36,Func_SaveDefaultButtonsSD,		Func_ReturnFromSettingsFrame }, // Save Default Mappings: SD
+	{	NULL,	BTN_A_NRM,	"Def USB",	510.0,	310.0,	 80.0,	56.0,	67,	 2,	 36, 67,Func_SaveDefaultButtonsUSB,		Func_ReturnFromSettingsFrame }, // Save Default Mappings: USB
 };
 
 struct TextBoxInfo
@@ -1515,121 +1519,71 @@ void Func_Memcard2()
 
 
 
-void Func_SaveButtonsSD()
+extern BOOL hasLoadedISO;
+extern char CdromId[10];
+#include <sys/stat.h>
+#include <sys/types.h>
+
+void saveMappingsImpl(const char* device, bool forceDefault)
 {
 	fileBrowser_file* configFile_file;
 	int (*configFile_init)(fileBrowser_file*) = fileBrowser_libfat_init;
 	int num_written = 0;
-	configFile_file = &saveDir_libfat_Default;
-	if(configFile_init(configFile_file)) {                //only if device initialized ok
-		FILE* f = fopen( "sd:/wiisxrx/controlG.cfg", "wb" );  //attempt to open file
-		if(f) {
-			save_configurations(f, &controller_GC);					//write out GC controller mappings
-			fclose(f);
-			num_written++;
+	configFile_file = (strcmp(device, "usb") == 0) ? &saveDir_libfat_USB : &saveDir_libfat_Default;
+	if(configFile_init(configFile_file)) {
+		char path[256];
+		char folder[256];
+		if (hasLoadedISO && !forceDefault) {
+			sprintf(folder, "%s:/wiisxrx/controllers", device);
+			struct stat s;
+			if (stat(folder, &s) != 0) {
+				// We don't have mkdir(path, mode) in fatfs easily accessible without knowing the platform exactly, 
+				// but wait, standard mkdir is `mkdir(folder, 0777)`. If it fails, whatever, fopen will fail.
+				mkdir(folder, 0777);
+			}
 		}
+
+		auto openFile = [&](const char* prefix) -> FILE* {
+			if (hasLoadedISO && !forceDefault) {
+				sprintf(path, "%s:/wiisxrx/controllers/%s_%s", device, CdromId, prefix);
+			} else {
+				sprintf(path, "%s:/wiisxrx/%s", device, prefix);
+			}
+			return fopen(path, "wb");
+		};
+
+		FILE* f = openFile("controlG.cfg");
+		if(f) { save_configurations(f, &controller_GC); fclose(f); num_written++; }
 #ifdef HW_RVL
-        f = fopen( "sd:/wiisxrx/controlH.cfg", "wb" );  //attempt to open file
-		if(f) {
-			save_configurations(f, &controller_HidGC);			//write out HID controller mappings
-			fclose(f);
-			num_written++;
-		}
-		f = fopen( "sd:/wiisxrx/controlC.cfg", "wb" );  //attempt to open file
-		if(f) {
-			save_configurations(f, &controller_Classic);			//write out Classic controller mappings
-			fclose(f);
-			num_written++;
-		}
-		f = fopen( "sd:/wiisxrx/controlN.cfg", "wb" );  //attempt to open file
-		if(f) {
-			save_configurations(f, &controller_WiimoteNunchuk);	//write out WM+NC controller mappings
-			fclose(f);
-			num_written++;
-		}
-		f = fopen( "sd:/wiisxrx/controlW.cfg", "wb" );  //attempt to open file
-		if(f) {
-			save_configurations(f, &controller_Wiimote);			//write out Wiimote controller mappings
-			fclose(f);
-			num_written++;
-		}
-		f = fopen("sd:/wiisxrx/controlP.cfg", "wb");  //attempt to open file
-		if (f) {
-			save_configurations(f, &controller_WiiUPro);			//write out Wii U Pro controller mappings
-			fclose(f);
-			num_written++;
-		}
-		f = fopen("sd:/wiisxrx/controlD.cfg", "wb");  //attempt to open file
-		if (f) {
-			save_configurations(f, &controller_WiiUGamepad);		//write out Wii U Gamepad controller mappings
-			fclose(f);
-			num_written++;
-		}
+		f = openFile("controlH.cfg");
+		if(f) { save_configurations(f, &controller_HidGC); fclose(f); num_written++; }
+		f = openFile("controlC.cfg");
+		if(f) { save_configurations(f, &controller_Classic); fclose(f); num_written++; }
+		f = openFile("controlN.cfg");
+		if(f) { save_configurations(f, &controller_WiimoteNunchuk); fclose(f); num_written++; }
+		f = openFile("controlW.cfg");
+		if(f) { save_configurations(f, &controller_Wiimote); fclose(f); num_written++; }
+		f = openFile("controlP.cfg");
+		if (f) { save_configurations(f, &controller_WiiUPro); fclose(f); num_written++; }
+		f = openFile("controlD.cfg");
+		if (f) { save_configurations(f, &controller_WiiUGamepad); fclose(f); num_written++; }
 #endif //HW_RVL
 	}
-	if (num_written == num_controller_t)
-		menu::MessageBox::getInstance().setMessage("Saved Button Configs to SD");
-	else
-		menu::MessageBox::getInstance().setMessage("Error saving Button Configs to SD");
+
+	char msg[128];
+	if (num_written == num_controller_t) {
+		sprintf(msg, "Saved %s Button Configs to %s", (hasLoadedISO && !forceDefault) ? "Game" : "Default", device);
+		menu::MessageBox::getInstance().setMessage(msg);
+	} else {
+		sprintf(msg, "Error saving Button Configs to %s", device);
+		menu::MessageBox::getInstance().setMessage(msg);
+	}
 }
 
-void Func_SaveButtonsUSB()
-{
-	fileBrowser_file* configFile_file;
-	int (*configFile_init)(fileBrowser_file*) = fileBrowser_libfat_init;
-	int num_written = 0;
-	configFile_file = &saveDir_libfat_USB;
-	if(configFile_init(configFile_file)) {                //only if device initialized ok
-		FILE* f = fopen( "usb:/wiisxrx/controlG.cfg", "wb" );  //attempt to open file
-		if(f) {
-			save_configurations(f, &controller_GC);					//write out GC controller mappings
-			fclose(f);
-			num_written++;
-		}
-#ifdef HW_RVL
-        f = fopen( "usb:/wiisxrx/controlH.cfg", "wb" );  //attempt to open file
-		if(f) {
-			save_configurations(f, &controller_HidGC);			//write out HID controller mappings
-			fclose(f);
-			num_written++;
-		}
-		f = fopen( "usb:/wiisxrx/controlC.cfg", "wb" );  //attempt to open file
-		if(f) {
-			save_configurations(f, &controller_Classic);			//write out Classic controller mappings
-			fclose(f);
-			num_written++;
-		}
-		f = fopen( "usb:/wiisxrx/controlN.cfg", "wb" );  //attempt to open file
-		if(f) {
-			save_configurations(f, &controller_WiimoteNunchuk);	//write out WM+NC controller mappings
-			fclose(f);
-			num_written++;
-		}
-		f = fopen( "usb:/wiisxrx/controlW.cfg", "wb" );  //attempt to open file
-		if(f) {
-			save_configurations(f, &controller_Wiimote);			//write out Wiimote controller mappings
-			fclose(f);
-			num_written++;
-		}
-		f = fopen("usb:/wiisxrx/controlP.cfg", "wb");  //attempt to open file
-		if (f) {
-			save_configurations(f, &controller_WiiUPro);			//write out Wii U Pro controller mappings
-			fclose(f);
-			num_written++;
-		}
-		f = fopen("usb:/wiisxrx/controlD.cfg", "wb");  //attempt to open file
-		if (f) {
-			save_configurations(f, &controller_WiiUGamepad);		//write out Wii U Gamepad controller mappings
-			fclose(f);
-			num_written++;
-		}
-#endif //HW_RVL
-	}
-	if (num_written == num_controller_t)
-		menu::MessageBox::getInstance().setMessage("Saved Button Configs to USB");
-	else
-		menu::MessageBox::getInstance().setMessage("Error saving Button Configs to USB");
-}
+void Func_SaveButtonsSD() { saveMappingsImpl("sd", false); }
+void Func_SaveButtonsUSB() { saveMappingsImpl("usb", false); }
+void Func_SaveDefaultButtonsSD() { saveMappingsImpl("sd", true); }
+void Func_SaveDefaultButtonsUSB() { saveMappingsImpl("usb", true); }
 
 void Func_SetButtonLoad()
 {
@@ -1856,8 +1810,26 @@ void Func_UseOpenGxGpu()
     }
 }
 
+static void Func_AutoSaveSettingsSD()
+{
+	fileBrowser_file* configFile_file;
+	int (*configFile_init)(fileBrowser_file*) = fileBrowser_libfat_init;
+	configFile_file = &saveDir_libfat_Default;
+	struct stat s;
+	if (stat("sd:/wiisxrx/", &s) == 0) {
+		if(configFile_init(configFile_file)) {
+			FILE* f = fopen("sd:/wiisxrx/settingsRX2022.cfg", "wb");
+			if(f) {
+				writeConfig(f);
+				fclose(f);
+			}
+		}
+	}
+}
+
 void Func_ReturnFromSettingsFrame()
 {
+	Func_AutoSaveSettingsSD();
 	menu::Gui::getInstance().menuLogo->setLocation(580.0, 70.0, -50.0);
 	pMenuContext->setActiveFrame(MenuContext::FRAME_MAIN);
 }

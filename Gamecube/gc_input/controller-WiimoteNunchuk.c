@@ -111,7 +111,7 @@ static button_t analog_sources_wmn[] = {
 	{ 0, NUNCHUK_AS_ANALOG,         "Nunchuk" },
 	{ 1, IR_AS_ANALOG,              "IR" },
 	/* New: steering-optimised tilt available even with Nunchuk attached */
-	{ 2, TILT_STEERING_AS_ANALOG,   "Steer" },
+	{ 2, TILT_STEERING_AS_ANALOG,   "Stick" },
 };
 
 static button_t analog_sources_wm[] = {
@@ -119,7 +119,7 @@ static button_t analog_sources_wm[] = {
 	{ 1, WHEEL_AS_ANALOG,           "Wheel" },
 	{ 2, IR_AS_ANALOG,              "IR" },
 	/* New: steering-optimised tilt with deadzone + cubic curve */
-	{ 3, TILT_STEERING_AS_ANALOG,   "Steer" },
+	{ 3, TILT_STEERING_AS_ANALOG,   "Stick" },
 	{ 4, NO_ANALOG,                 "None" },
 };
 
@@ -234,11 +234,11 @@ static int _GetKeys(int Control, BUTTONS * Keys, controller_config_t* config,
 			/* Step 4: normalise to [-1.0, +1.0] */
 			float norm = roll / max;
 
-			/* Step 5 & 6: Linear response & Direct output
-			 * PS1 games expect a snappy, linear thumbstick with zero lag.
-			 * We map the normalized tilt directly to the output without 
-			 * artificial delay or cubic crushing. */
-			float curved = norm;
+			/* Step 5 & 6: Squared response & Direct output
+			 * PS1 games expect a snappy thumbstick with zero lag.
+			 * We map the normalized tilt using a squared curve to give 
+			 * fine control near the center for high-speed corners. */
+			float curved = (norm >= 0.0f) ? (norm * norm) : -(norm * norm);
 			
 			/* Step 7: scale to s8 range */
 			stickX = (s8)(curved * 127.0f * config->sensitivity);
@@ -283,7 +283,7 @@ static int _GetKeys(int Control, BUTTONS * Keys, controller_config_t* config,
 			if (roll >  max) roll =  max;
 			if (roll < -max) roll = -max;
 			float norm = roll / max;
-			float curved = norm;
+			float curved = (norm >= 0.0f) ? (norm * norm) : -(norm * norm);
 			stickX = (s8)(curved * 127.0f * config->sensitivity);
 			stickY = 0;
 		}

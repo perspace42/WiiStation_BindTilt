@@ -84,8 +84,8 @@ typedef button_t* button_tp;
 /* Default tilt-steering values used when initialising a new profile.
  * Exposed here (not in controller-WiimoteNunchuk.c) so both the C
  * input module and the C++ menu code share the same constants. */
-#define TILT_DEADZONE_DEG_DEFAULT  5.0f
-#define TILT_MAX_DEG_DEFAULT      35.0f
+#define TILT_DEADZONE_DEG_DEFAULT  2.5f
+#define TILT_MAX_DEG_DEFAULT      45.0f
 typedef struct {
 	button_tp SQU, CRO, CIR, TRI;
 	button_tp R1, L1, R2, L2, R3, L3;

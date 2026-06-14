@@ -230,9 +230,7 @@ static bool isCueCcdFileExist(const char *filePath, const char *fileName, const 
 }
 
 static bool isFileOk(const char *filePath, const char *fileName) {
-    if (strstr(fileName, ".cue")
-        || strstr(fileName, ".CUE")
-        || strstr(fileName, ".ccd")
+    if (strstr(fileName, ".ccd")
         || strstr(fileName, ".CCD")
         || strstr(fileName, ".iso")
         || strstr(fileName, ".ISO")
@@ -241,7 +239,8 @@ static bool isFileOk(const char *filePath, const char *fileName) {
     {
         return true;
     }
-    else if (strstr(fileName, ".sub") || strstr(fileName, ".SUB"))
+    else if (strstr(fileName, ".sub") || strstr(fileName, ".SUB")
+             || strstr(fileName, ".cue") || strstr(fileName, ".CUE"))
     {
         return false;
     }
